@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    // --- Perubahan Utama untuk Lingkungan Node.js (Express) ---
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "types": ["node"],
+    "esModuleInterop": true,
+    "verbatimModuleSyntax": false,
+    // ---------------------------------------------------------
+
+    // Opsi dari file Anda yang sudah ada (stabil dan bagus)
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "strict": true,
+    "jsx": "react-jsx", // Tidak terpakai di backend, tapi tidak masalah
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true,
+
+    // Opsi tambahan untuk kejelasan & build production
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  // Menentukan file apa saja yang perlu di-compile
+  "include": ["src/**/*", "prisma/prisma.config.ts"],
+  "exclude": ["node_modules"]
+}

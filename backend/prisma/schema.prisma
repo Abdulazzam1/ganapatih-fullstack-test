@@ -1,0 +1,53 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Skema tabel berdasarkan ERD 
+
+model User {
+  id            Int      @id @default(autoincrement())
+  username      String   @unique // [cite: 86]
+  password_hash String   // [cite: 87]
+  created_at    DateTime @default(now()) @map("created_at") // [cite: 89]
+
+  // Relasi
+  posts     Post[]
+  following Follows[] @relation("follower")
+  followers Follows[] @relation("followee")
+
+  @@map("users") // [cite: 84]
+}
+
+model Post {
+  id        Int      @id @default(autoincrement()) // [cite: 90]
+  user_id   Int // [cite: 91]
+  content   String // [cite: 92]
+  created_at DateTime @default(now()) @map("created_at") // [cite: 93]
+
+  // Relasi
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("posts") // [cite: 88]
+}
+
+model Follows {
+  follower_id Int // [cite: 95]
+  followee_id Int // [cite: 96]
+  created_at  DateTime @default(now()) @map("created_at") // [cite: 97]
+
+  // Relasi
+  follower User @relation("follower", fields: [follower_id], references: [id], onDelete: Cascade)
+  followee User @relation("followee", fields: [followee_id], references: [id], onDelete: Cascade)
+
+  // Primary Key gabungan [cite: 98-99]
+  @@id([follower_id, followee_id])
+  @@map("follows") // [cite: 94]
+}
