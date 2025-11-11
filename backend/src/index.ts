@@ -1,9 +1,9 @@
-// src/index.ts (VERSI FINAL YANG BERSIH)
+// backend/src/index.ts
 import "dotenv/config";
 import express from 'express';
 import cookieParser from 'cookie-parser';
+import cors from 'cors'; // <-- 1. IMPORT BARU
 
-// --- IMPORT SEMUA ROUTER ---
 import authRouter from './routes/auth.routes';
 import postRouter from './routes/post.routes';
 import followRouter from './routes/follow.routes';
@@ -15,13 +15,18 @@ const PORT = process.env.PORT || 4000;
 app.use(express.json());
 app.use(cookieParser());
 
-// --- GUNAKAN SEMUA ROUTERS ---
-app.use(authRouter);   // Mendaftarkan /api/register, /api/login, /api/refresh
-app.use(postRouter);   // Mendaftarkan /api/posts
-app.use(followRouter); // Mendaftarkan /api/follow/:userid
+// --- 2. TAMBAHKAN MIDDLEWARE CORS ---
+app.use(cors({
+  origin: 'http://localhost:3000', // Izinkan port frontend
+  credentials: true, // Izinkan pengiriman cookie (untuk refresh token)
+}));
 
-// --- (Pastikan ini selalu di paling bawah) ---
-// Jalankan server
+// --- GUNAKAN ROUTERS ---
+app.use(authRouter);
+app.use(postRouter);
+app.use(followRouter);
+
+// --- Jalankan server ---
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
