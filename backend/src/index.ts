@@ -7,6 +7,7 @@ import cors from 'cors'; // <-- 1. IMPORT BARU
 import authRouter from './routes/auth.routes';
 import postRouter from './routes/post.routes';
 import followRouter from './routes/follow.routes';
+import userRouter from './routes/user.routes';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -25,6 +26,7 @@ app.use(cors({
 app.use(authRouter);
 app.use(postRouter);
 app.use(followRouter);
+app.use(userRouter);
 
 // --- Jalankan server ---
 app.listen(PORT, () => {
