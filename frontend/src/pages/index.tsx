@@ -1,5 +1,5 @@
 // src/pages/index.tsx
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { NextPage } from 'next';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -9,7 +9,7 @@ import api from '../utils/api';
 // Import Komponen
 import CreatePostForm from '../components/CreatePostForm';
 import UserList from '../components/UserList';
-import TimeAgo from '../components/TimeAgo'; // <-- 1. IMPORT BARU
+import TimeAgo from '../components/TimeAgo';
 
 // Import CSS Module
 import styles from './index.module.css';
@@ -24,43 +24,104 @@ interface Post {
 
 const HomePage: NextPage = () => {
   const router = useRouter();
-  // Mengambil token, meskipun tidak digunakan secara langsung di JSX,
-  // ini penting untuk memicu re-render jika state berubah (walau logic kita saat ini bergantung pada `useEffect`
   const token = useAuthStore((state) => state.accessToken); 
   
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true); // Untuk cek auth
-  const [isLoadingFeed, setIsLoadingFeed] = useState(false); // Untuk loading feed
+  
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingFeed, setIsLoadingFeed] = useState(false);
+
   const [feedError, setFeedError] = useState('');
 
-  // 'fetchFeed' sekarang di-wrap dengan useCallback
-  const fetchFeed = useCallback(async () => {
+  // --- FUNGSI FETCHFEED YANG DIPERBAIKI ---
+  const fetchFeed = useCallback(async (pageNum: number, isReset: boolean = false) => {
+    // 1. Cek guard
+    if (isLoadingFeed) return;
+    // Hanya cek 'hasMore' jika ini BUKAN sebuah reset
+    if (!isReset && !hasMore) {
+      console.log("No more data to fetch.");
+      return; 
+    }
+
     setIsLoadingFeed(true);
+    setFeedError('');
+    
     try {
-      const res = await api.get('/api/feed');
-      setPosts(res.data.posts);
-      setFeedError('');
+      const res = await api.get(`/api/feed?page=${pageNum}&limit=10`);
+      
+      if (res.data.posts.length > 0) {
+        // **PERBAIKAN BUG 1: Ganti (replace) saat reset, Tambah (append) saat tidak**
+        setPosts(prevPosts => 
+          isReset ? res.data.posts : [...prevPosts, ...res.data.posts]
+        );
+        setPage(pageNum + 1); // Siapkan untuk halaman berikutnya
+        setHasMore(true); // Kita dapat data, jadi pasti 'hasMore'
+      } else {
+        setHasMore(false); // Tidak ada data lagi
+        // Jika ini adalah reset (page 1) dan tidak ada data, pastikan posts kosong
+        if (isReset) {
+          setPosts([]);
+        }
+      }
     } catch (err: any) {
       console.error("Failed to fetch feed:", err);
       setFeedError(err.message || "Failed to load feed.");
     } finally {
       setIsLoadingFeed(false);
     }
-  }, []);
+    // 'hasMore' tidak diperlukan sebagai dependensi di sini
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoadingFeed]); 
 
+  // --- FUNGSI BARU UNTUK RESET ---
+  // Ini adalah fungsi yang akan kita panggil dari komponen anak
+  const handleResetFeed = () => {
+    console.log("Resetting feed...");
+    setPosts([]);       // Kosongkan post
+    setPage(1);         // Reset halaman ke 1
+    setHasMore(true);   // Reset hasMore
+    // Panggil fetchFeed(1, true)
+    // Kita panggil di useEffect di bawah agar state-nya update dulu
+    
+    // PERBAIKAN BUG 2: Panggil fetchFeed(1, true) secara eksplisit
+    // Ini akan mengabaikan 'hasMore' yang lama dan me-reset feed
+    fetchFeed(1, true);
+  };
+  
+  // --- EFEK UNTUK PROTEKSI RUTE ---
   useEffect(() => {
-    // Cek token saat komponen mount (setelah hidrasi)
     const tokenOnMount = useAuthStore.getState().accessToken;
-
     if (!tokenOnMount) {
       router.replace('/login');
     } else {
-      fetchFeed();
+      // Panggil halaman PERTAMA saat load
+      fetchFeed(1, true); // (page=1, isReset=true)
       setIsLoading(false); // Selesai cek auth
     }
-    // Kita jalankan ini berdasarkan token dan router, 
-    // tapi 'fetchFeed' di-memoize oleh useCallback
-  }, [router, fetchFeed, token]); 
+    // Hapus fetchFeed dari dependensi ini agar hanya jalan sekali
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]); 
+
+  // --- LOGIKA INTERSECTION OBSERVER ---
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastPostRef = useCallback((node: HTMLDivElement) => {
+    if (isLoadingFeed) return;
+    if (observer.current) observer.current.disconnect();
+
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) {
+        console.log("Last post visible, fetching more data (page " + page + ")");
+        // Panggil halaman berikutnya (bukan reset)
+        fetchFeed(page, false); 
+      }
+    });
+
+    if (node) observer.current.observe(node);
+    
+  }, [isLoadingFeed, hasMore, page, fetchFeed]);
+  // ------------------------------------
 
   // Tampilan loading utama (saat cek auth)
   if (isLoading) {
@@ -71,7 +132,7 @@ const HomePage: NextPage = () => {
     );
   }
 
-  // --- TAMPILAN HALAMAN UTAMA (jika sudah login) ---
+  // --- TAMPILAN HALAMAN UTAMA ---
   return (
     <div className={styles.container}>
       <Head>
@@ -80,45 +141,71 @@ const HomePage: NextPage = () => {
 
       {/* --- KOLOM UTAMA (KIRI) --- */}
       <main className={styles.mainContent}>
-        <CreatePostForm onPostCreated={fetchFeed} />
+        {/* Panggil fungsi 'handleResetFeed' */}
+        <CreatePostForm onPostCreated={handleResetFeed} />
 
         {/* --- Daftar Feed --- */}
         <div className={styles.feedList}>
-          {isLoadingFeed && <p>Loading feed posts...</p>}
-          
+          {/* Tampilkan postingan */}
+          {posts.map((post, index) => {
+            // Cek apakah ini postingan terakhir
+            if (posts.length === index + 1) {
+              // Jika ya, pasang 'ref' di sini
+              return (
+                <div ref={lastPostRef} key={post.id} className={styles.post}>
+                  <div className={styles.postHeader}>
+                    <span className={styles.postUser}>User {post.userid}</span>
+                    <span className={styles.postTime}>
+                      <TimeAgo timestamp={post.createdat} />
+                    </span>
+                  </div>
+                  <p className={styles.postContent}>{post.content}</p>
+                </div>
+              );
+            } else {
+              // Jika bukan, render seperti biasa
+              return (
+                <div key={post.id} className={styles.post}>
+                  <div className={styles.postHeader}>
+                    <span className={styles.postUser}>User {post.userid}</span>
+                    <span className={styles.postTime}>
+                      <TimeAgo timestamp={post.createdat} />
+                    </span>
+                  </div>
+                  <p className={styles.postContent}>{post.content}</p>
+                </div>
+              );
+            }
+          })}
+
+          {/* Tampilkan loading di bagian bawah saat mengambil data baru */}
+          {isLoadingFeed && <p>Loading more posts...</p>}
+
           {feedError && (
             <div className={styles.error}>
               {feedError}
             </div>
           )}
 
-          {/* Cek jika tidak mengikuti siapa pun */}
-          {posts.length === 0 && !feedError && !isLoadingFeed && (
+          {/* Cek jika tidak mengikuti siapa pun ATAU sudah tidak ada data lagi */}
+          {!isLoadingFeed && posts.length === 0 && !feedError && (
             <div className={styles.emptyFeed}>
               <h3 className={styles.emptyFeedTitle}>Your feed is empty</h3>
               <p>Start following other users to see their posts!</p>
             </div>
           )}
-
-          {/* Tampilkan postingan */}
-          {!isLoadingFeed && posts.map((post) => (
-            <div key={post.id} className={styles.post}>
-              <div className={styles.postHeader}>
-                <span className={styles.postUser}>User {post.userid}</span>
-                {/* --- 2. PERUBAHAN DI SINI --- */}
-                <span className={styles.postTime}>
-                  <TimeAgo timestamp={post.createdat} />
-                </span>
-              </div>
-              <p className={styles.postContent}>{post.content}</p>
+          {!isLoadingFeed && !hasMore && posts.length > 0 && (
+             <div className={styles.emptyFeed}>
+              <p>You have reached the end of the feed.</p>
             </div>
-          ))}
+          )}
         </div>
       </main>
 
       {/* --- SIDEBAR (KANAN) --- */}
       <aside className={styles.sidebar}>
-        <UserList onFollowSuccess={fetchFeed} />
+        {/* Panggil fungsi 'handleResetFeed' */}
+        <UserList onFollowSuccess={handleResetFeed} />
       </aside>
     </div>
   );
