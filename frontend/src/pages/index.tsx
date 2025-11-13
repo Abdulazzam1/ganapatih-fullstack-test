@@ -8,10 +8,11 @@ import api from '../utils/api';
 
 // Import Komponen
 import CreatePostForm from '../components/CreatePostForm';
-import UserList from '../components/UserList'; // <-- 1. IMPORT USERLIST
+import UserList from '../components/UserList';
+import TimeAgo from '../components/TimeAgo'; // <-- 1. IMPORT BARU
 
 // Import CSS Module
-import styles from './index.module.css'; // <-- 2. IMPORT CSS LAYOUT BARU
+import styles from './index.module.css';
 
 // Tipe data untuk Post
 interface Post {
@@ -23,7 +24,9 @@ interface Post {
 
 const HomePage: NextPage = () => {
   const router = useRouter();
-  const token = useAuthStore((state) => state.accessToken);
+  // Mengambil token, meskipun tidak digunakan secara langsung di JSX,
+  // ini penting untuk memicu re-render jika state berubah (walau logic kita saat ini bergantung pada `useEffect`
+  const token = useAuthStore((state) => state.accessToken); 
   
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true); // Untuk cek auth
@@ -47,15 +50,17 @@ const HomePage: NextPage = () => {
 
   useEffect(() => {
     // Cek token saat komponen mount (setelah hidrasi)
-    const token = useAuthStore.getState().accessToken;
+    const tokenOnMount = useAuthStore.getState().accessToken;
 
-    if (!token) {
+    if (!tokenOnMount) {
       router.replace('/login');
     } else {
       fetchFeed();
       setIsLoading(false); // Selesai cek auth
     }
-  }, [router, fetchFeed]);
+    // Kita jalankan ini berdasarkan token dan router, 
+    // tapi 'fetchFeed' di-memoize oleh useCallback
+  }, [router, fetchFeed, token]); 
 
   // Tampilan loading utama (saat cek auth)
   if (isLoading) {
@@ -100,8 +105,9 @@ const HomePage: NextPage = () => {
             <div key={post.id} className={styles.post}>
               <div className={styles.postHeader}>
                 <span className={styles.postUser}>User {post.userid}</span>
+                {/* --- 2. PERUBAHAN DI SINI --- */}
                 <span className={styles.postTime}>
-                  {new Date(post.createdat).toLocaleString()}
+                  <TimeAgo timestamp={post.createdat} />
                 </span>
               </div>
               <p className={styles.postContent}>{post.content}</p>
