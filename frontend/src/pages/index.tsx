@@ -112,7 +112,7 @@ const HomePage: NextPage = () => {
 
       {/* --- SIDEBAR (KANAN) --- */}
       <aside className={styles.sidebar}>
-        <UserList /> {/* <-- 3. TAMPILKAN USERLIST DI SINI */}
+        <UserList onFollowSuccess={fetchFeed} />
       </aside>
     </div>
   );

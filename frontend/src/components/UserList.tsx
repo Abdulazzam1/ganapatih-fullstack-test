@@ -9,34 +9,70 @@ interface User {
   username: string;
 }
 
-export default function UserList() {
+// Props
+interface UserListProps {
+  onFollowSuccess: () => void; // Fungsi untuk me-refresh feed
+}
+
+export default function UserList({ onFollowSuccess }: UserListProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // State baru untuk melacak siapa yang sudah kita follow
+  const [followingIds, setFollowingIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
-    // Ambil daftar user saat komponen dimuat
-    const fetchUsers = async () => {
+    const fetchData = async () => {
       try {
-        const res = await api.get('/api/users');
-        setUsers(res.data);
+        // 1. Ambil daftar SEMUA user
+        const usersRes = await api.get('/api/users');
+        setUsers(usersRes.data);
+
+        // 2. Ambil daftar ID yang SUDAH kita follow
+        const followingRes = await api.get('/api/following');
+        // 'followingRes.data' adalah array seperti [5, 7]
+        setFollowingIds(new Set(followingRes.data));
+
       } catch (err) {
-        console.error("Failed to fetch users:", err);
+        console.error("Failed to fetch data:", err);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchUsers();
-  }, []); // Dependensi kosong, hanya jalan sekali
+    fetchData();
+  }, []); // Hanya jalan sekali
 
-  const handleFollow = async (userId: number) => {
+  const handleFollowToggle = async (userId: number) => {
+    // Cek apakah kita sudah follow user ini?
+    const isCurrentlyFollowing = followingIds.has(userId);
+
     try {
-      // Panggil API follow [cite: 136-140]
-      const res = await api.post(`/api/follow/${userId}`);
-      alert(res.data.message);
-      // Idealnya, kita harus me-refresh feed, tapi untuk sekarang alert saja cukup
+      if (isCurrentlyFollowing) {
+        // --- LOGIKA UNFOLLOW ---
+        await api.delete(`/api/follow/${userId}`); // Panggil DELETE
+        // Update state secara optimis (langsung)
+        setFollowingIds(prevIds => {
+          const newIds = new Set(prevIds);
+          newIds.delete(userId);
+          return newIds;
+        });
+      } else {
+        // --- LOGIKA FOLLOW ---
+        await api.post(`/api/follow/${userId}`); // Panggil POST
+        // Update state secara optimis (langsung)
+        setFollowingIds(prevIds => {
+          const newIds = new Set(prevIds);
+          newIds.add(userId);
+          return newIds;
+        });
+      }
+
+      // 3. Panggil refresh feed (untuk kedua aksi)
+      onFollowSuccess();
+
     } catch (err: any) {
-      console.error("Failed to follow user:", err);
-      alert(err.response?.data?.message || "Failed to follow");
+      console.error("Follow/unfollow failed:", err);
+      alert(err.response?.data?.message || "Failed");
     }
   };
 
@@ -50,17 +86,26 @@ export default function UserList() {
       <div className={styles.list}>
         {users.length === 0 && <p>No other users found.</p>}
         
-        {users.map((user) => (
-          <div key={user.id} className={styles.userItem}>
-            <span className={styles.username}>{user.username}</span>
-            <button 
-              className={styles.followButton}
-              onClick={() => handleFollow(user.id)}
-            >
-              Follow
-            </button>
-          </div>
-        ))}
+        {users.map((user) => {
+          const isFollowing = followingIds.has(user.id);
+          
+          return (
+            <div key={user.id} className={styles.userItem}>
+              <span className={styles.username}>{user.username}</span>
+              <button 
+                className={styles.followButton}
+                onClick={() => handleFollowToggle(user.id)}
+                // 4. Ganti style dan teks tombol secara dinamis
+                style={{
+                  backgroundColor: isFollowing ? '#6b7280' : '#3b82f6', // Abu-abu jika following
+                  color: 'white',
+                }}
+              >
+                {isFollowing ? 'Unfollow' : 'Follow'}
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

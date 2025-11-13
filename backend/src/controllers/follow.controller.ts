@@ -7,7 +7,7 @@ import { Prisma } from '@prisma/client';
 // --- LOGIC FOLLOW USER ---
 export const followUser = async (req: AuthRequest, res: Response) => {
   const followeeId = parseInt(req.params.userid!, 10);
-  const followerId = req.userId!; // <-- Ini Line 9 yang benar
+  const followerId = req.userId!;
 
   // 1. Validasi: Tidak bisa follow diri sendiri
   if (followerId === followeeId) {
@@ -46,7 +46,7 @@ export const followUser = async (req: AuthRequest, res: Response) => {
 // --- LOGIC UNFOLLOW USER ---
 export const unfollowUser = async (req: AuthRequest, res: Response) => {
   const followeeId = parseInt(req.params.userid!, 10);
-  const followerId = req.userId!; // <-- Ini Line 48 yang benar
+  const followerId = req.userId!;
 
   try {
     // 1. Hapus relasi 'follow'
@@ -65,6 +65,27 @@ export const unfollowUser = async (req: AuthRequest, res: Response) => {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       return res.status(404).json({ message: "You are not following this user" });
     }
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// --- LOGIC GET FOLLOWING IDS (BARU) ---
+export const getFollowing = async (req: AuthRequest, res: Response) => {
+  const followerId = req.userId!;
+  try {
+    const following = await prisma.follows.findMany({
+      where: {
+        follower_id: followerId,
+      },
+      select: {
+        followee_id: true, // Hanya kirim daftar ID
+      },
+    });
+    // Ubah dari [ { followee_id: 5 }, { followee_id: 7 } ] menjadi [ 5, 7 ]
+    const followingIds = following.map((f) => f.followee_id);
+    res.status(200).json(followingIds);
+  } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal server error" });
   }
