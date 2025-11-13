@@ -1,0 +1,9 @@
+# Abaikan dependensi lokal
+node_modules
+
+# Abaikan folder build Next.js lokal
+.next
+
+# Abaikan file environment lokal
+.env.local
+npm-debug.log

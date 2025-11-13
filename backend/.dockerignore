@@ -1,0 +1,9 @@
+# Abaikan dependensi lokal, Docker akan menginstalnya sendiri
+node_modules
+
+# Abaikan folder build lokal
+dist
+
+# Abaikan log dan file environment
+.env
+npm-debug.log

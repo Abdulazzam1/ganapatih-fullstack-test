@@ -1,0 +1,52 @@
+services:
+  # --- 1. LAYANAN DATABASE POSTGRES ---
+  db:
+    image: postgres:16-alpine
+    container_name: ganapatih-db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: ganapatih_feed
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # --- 2. LAYANAN BACKEND ---
+  backend:
+    container_name: ganapatih-backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        DATABASE_URL: "postgresql://admin:password123@db:5432/ganapatih_feed?schema=public"
+    ports:
+      - "4001:4000"
+    environment:
+      DATABASE_URL: "postgresql://admin:password123@db:5432/ganapatih_feed?schema=public"
+      JWT_SECRET: "docker-secret-key-super-aman"
+      REFRESH_TOKEN_SECRET: "docker-secret-key-lain-yang-berbeda"
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  # --- 3. LAYANAN FRONTEND (DENGAN INDENTASI YANG BENAR) ---
+  frontend: # <-- SUDAH DIPERBAIKI
+    container_name: ganapatih-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: "http://localhost:4001"
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:4001"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+# Definisikan volume untuk database
+volumes:
+  postgres-data:
