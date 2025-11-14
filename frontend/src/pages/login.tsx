@@ -2,10 +2,10 @@
 import { useState } from 'react';
 import type { NextPage } from 'next';
 import Head from 'next/head';
-import { useRouter } from 'next/router'; // Import useRouter
+import { useRouter } from 'next/router';
 import styles from './login.module.css'; 
-import api from '../utils/api'; // <-- 1. IMPORT API CLIENT (dari src/utils)
-import { useAuthStore } from '../store/auth.store'; // <-- 2. IMPORT ZUSTAND STORE
+import api from '../utils/api';
+import { useAuthStore } from '../store/auth.store';
 
 type FormMode = 'login' | 'register';
 
@@ -13,19 +13,30 @@ const LoginPage: NextPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<FormMode>('login');
-  const [error, setError] = useState('');
+  
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [registerError, setRegisterError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const router = useRouter(); // Inisialisasi router
-  const setToken = useAuthStore((state) => state.setToken); // <-- 3. Ambil 'setToken' dari store
+  const router = useRouter();
+  const setToken = useAuthStore((state) => state.setToken); // (PERBAIKAN)
+
+  const handleModeChange = (newMode: FormMode) => {
+    setMode(newMode);
+    setLoginError(null);
+    setRegisterError(null);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (mode === 'login') setLoginError(null);
+    else setRegisterError(null);
+    
     if (!username || !password) {
-      setError('Username and password cannot be empty');
+      const msg = 'Username and password cannot be empty';
+      mode === 'login' ? setLoginError(msg) : setRegisterError(msg);
       return;
     }
-    setError('');
     setIsLoading(true);
 
     if (mode === 'register') {
@@ -35,43 +46,40 @@ const LoginPage: NextPage = () => {
     }
   };
 
-  // --- FUNGSI REGISTER (MENGGUNAKAN AXIOS) ---
   const handleRegister = async () => {
     try {
-      // Gunakan 'api' client, bukan 'fetch'
-      const res = await api.post('/api/register', { username, password }); // [cite: 101-110]
-      
-      // Sukses register
+      const res = await api.post('/api/register', { username, password });
       console.log('Register success:', res.data);
       alert('Registration successful! Please login.');
-      setMode('login'); // Otomatis pindah ke tab login
-
+      handleModeChange('login');
     } catch (err: any) {
-      // Axios membungkus error di 'err.response.data'
-      setError(err.response?.data?.message || 'Failed to register'); // [cite: 60-62]
+      setRegisterError(err.response?.data?.message || 'Failed to register');
       console.error(err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // --- FUNGSI LOGIN (MENGGUNAKAN AXIOS & ZUSTAND) ---
   const handleLogin = async () => {
     try {
-      // Gunakan 'api' client, bukan 'fetch'
-      const res = await api.post('/api/login', { username, password });// [cite: 113-124]
+      const res = await api.post('/api/login', { username, password });
 
-      const { token } = res.data; // Ambil access token dari respons
+      // (PERBAIKAN) Ambil 'token' (sesuai PDF)
+      const { token } = res.data; 
 
-      // **INI LANGKAH PENTINGNYA:**
-      setToken(token); // Simpan token ke global store (Zustand)
+      // (PERBAIKAN) Kirim 1 token ke Zustand
+      setToken(token); 
 
-      // Redirect ke halaman utama
-      router.push('/'); // Pindah ke halaman feed
+      setTimeout(() => {
+        router.push('/');
+      }, 0);
 
     } catch (err: any) {
-      // Axios membungkus error di 'err.response.data'
-      setError(err.response?.data?.message || 'Failed to login'); // [cite: 60-62]
+      let errorMessage = 'Login failed. Please try again.';
+      if (err.response && err.response.data && err.response.data.message) {
+        errorMessage = err.response.data.message;
+      }
+      setLoginError(errorMessage);
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -79,6 +87,8 @@ const LoginPage: NextPage = () => {
   };
 
   return (
+    // ... JSX Anda (Form, Button, dll) TIDAK PERLU DIUBAH ...
+    // ... (Salin semua JSX dari file lama Anda ke sini) ...
     <div className={styles.container}>
       <Head>
         <title>Login / Register - Ganapatih Feed</title>
@@ -89,7 +99,7 @@ const LoginPage: NextPage = () => {
 
         <div className={styles.toggleButtons}>
           <button
-            onClick={() => setMode('login')}
+            onClick={() => handleModeChange('login')}
             disabled={isLoading}
             className={`${styles.toggleButton} ${
               mode === 'login' ? styles.active : ''
@@ -98,7 +108,7 @@ const LoginPage: NextPage = () => {
             Login
           </button>
           <button
-            onClick={() => setMode('register')}
+            onClick={() => handleModeChange('register')}
             disabled={isLoading}
             className={`${styles.toggleButton} ${
               mode === 'register' ? styles.active : ''
@@ -137,7 +147,12 @@ const LoginPage: NextPage = () => {
             />
           </div>
 
-          {error && <div className={styles.error}>{error}</div>}
+          {mode === 'login' && loginError && (
+            <div className={styles.error}>{loginError}</div>
+          )}
+          {mode === 'register' && registerError && (
+            <div className={styles.error}>{registerError}</div>
+          )}
 
           <div>
             <button

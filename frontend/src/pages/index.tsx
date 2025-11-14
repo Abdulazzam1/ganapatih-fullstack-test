@@ -6,15 +6,11 @@ import { useRouter } from 'next/router';
 import { useAuthStore } from '../store/auth.store';
 import api from '../utils/api';
 
-// Import Komponen
 import CreatePostForm from '../components/CreatePostForm';
 import UserList from '../components/UserList';
 import TimeAgo from '../components/TimeAgo';
-
-// Import CSS Module
 import styles from './index.module.css';
 
-// Tipe data untuk Post
 interface Post {
   id: number;
   userid: number;
@@ -24,46 +20,35 @@ interface Post {
 
 const HomePage: NextPage = () => {
   const router = useRouter();
-  const token = useAuthStore((state) => state.accessToken); 
-  
+  const token = useAuthStore((state) => state.token);
   const [posts, setPosts] = useState<Post[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // Untuk cek auth
   
+  const [isHydrating, setIsHydrating] = useState(true); // STATE KUNCI
+  const [isLoadingFeed, setIsLoadingFeed] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [isLoadingFeed, setIsLoadingFeed] = useState(false);
-
   const [feedError, setFeedError] = useState('');
 
-  // --- FUNGSI FETCHFEED YANG DIPERBAIKI ---
+  // (Fungsi fetchFeed Anda sudah benar)
   const fetchFeed = useCallback(async (pageNum: number, isReset: boolean = false) => {
-    // 1. Cek guard
     if (isLoadingFeed) return;
-    // Hanya cek 'hasMore' jika ini BUKAN sebuah reset
     if (!isReset && !hasMore) {
       console.log("No more data to fetch.");
       return; 
     }
-
     setIsLoadingFeed(true);
     setFeedError('');
-    
     try {
       const res = await api.get(`/api/feed?page=${pageNum}&limit=10`);
-      
       if (res.data.posts.length > 0) {
-        // **PERBAIKAN BUG 1: Ganti (replace) saat reset, Tambah (append) saat tidak**
         setPosts(prevPosts => 
           isReset ? res.data.posts : [...prevPosts, ...res.data.posts]
         );
-        setPage(pageNum + 1); // Siapkan untuk halaman berikutnya
-        setHasMore(true); // Kita dapat data, jadi pasti 'hasMore'
+        setPage(pageNum + 1);
+        setHasMore(true);
       } else {
-        setHasMore(false); // Tidak ada data lagi
-        // Jika ini adalah reset (page 1) dan tidak ada data, pastikan posts kosong
-        if (isReset) {
-          setPosts([]);
-        }
+        setHasMore(false);
+        if (isReset) setPosts([]);
       }
     } catch (err: any) {
       console.error("Failed to fetch feed:", err);
@@ -71,60 +56,81 @@ const HomePage: NextPage = () => {
     } finally {
       setIsLoadingFeed(false);
     }
-    // 'hasMore' tidak diperlukan sebagai dependensi di sini
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoadingFeed]); 
+  }, [isLoadingFeed, hasMore]);
 
-  // --- FUNGSI BARU UNTUK RESET ---
-  // Ini adalah fungsi yang akan kita panggil dari komponen anak
+  // (Fungsi handleResetFeed Anda sudah benar)
   const handleResetFeed = () => {
     console.log("Resetting feed...");
-    setPosts([]);       // Kosongkan post
-    setPage(1);         // Reset halaman ke 1
-    setHasMore(true);   // Reset hasMore
-    // Panggil fetchFeed(1, true)
-    // Kita panggil di useEffect di bawah agar state-nya update dulu
-    
-    // PERBAIKAN BUG 2: Panggil fetchFeed(1, true) secara eksplisit
-    // Ini akan mengabaikan 'hasMore' yang lama dan me-reset feed
+    setPosts([]);
+    setPage(1);
+    setHasMore(true);
     fetchFeed(1, true);
   };
   
-  // --- EFEK UNTUK PROTEKSI RUTE ---
+  // =================================================================
+  // --- (PERBAIKAN BUG UTAMA v3.1) - MENGGUNAKAN 'SUBSCRIBE' ---
+  // =================================================================
   useEffect(() => {
-    const tokenOnMount = useAuthStore.getState().accessToken;
-    if (!tokenOnMount) {
+    // 'useEffect' PERTAMA: HANYA untuk melacak status hidrasi
+    
+    if (useAuthStore.persist.hasHydrated()) {
+      // Jika kebetulan sudah selesai, langsung set
+      console.log("Already hydrated.");
+      setIsHydrating(false);
+    } else {
+      // Jika belum, subscribe ke store.
+      // Perubahan pertama (rehidrasi) akan memicu ini.
+      const unsubscribe = useAuthStore.subscribe(() => {
+        if (useAuthStore.persist.hasHydrated()) {
+          console.log("Rehydration complete via subscribe.");
+          setIsHydrating(false);
+          unsubscribe(); // Berhenti subscribe setelah selesai
+        }
+      });
+      
+      return () => {
+        unsubscribe(); // Cleanup
+      };
+    }
+  }, []); // Hanya berjalan sekali saat mount
+
+
+  useEffect(() => {
+    // 'useEffect' KEDUA: Bereaksi terhadap perubahan hidrasi DAN token
+    
+    if (isHydrating) {
+      console.log("Waiting for hydration...");
+      return; // JANGAN LAKUKAN APA-APA jika masih hidrasi
+    }
+
+    if (!token) {
+      // Jika TIDAK ADA token SETELAH hidrasi, mental
+      console.log("Hydration complete, NO token found. Redirecting to login.");
       router.replace('/login');
     } else {
-      // Panggil halaman PERTAMA saat load
-      fetchFeed(1, true); // (page=1, isReset=true)
-      setIsLoading(false); // Selesai cek auth
+      // Jika ADA token SETELAH hidrasi, muat data
+      console.log("Hydration complete, token FOUND. Loading data.");
+      fetchFeed(1, true);
     }
-    // Hapus fetchFeed dari dependensi ini agar hanya jalan sekali
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]); 
+  }, [isHydrating, token, router]); // Bereaksi pada 3 hal ini
 
-  // --- LOGIKA INTERSECTION OBSERVER ---
+
+  // (Logika Intersection Observer Anda sudah benar)
   const observer = useRef<IntersectionObserver | null>(null);
   const lastPostRef = useCallback((node: HTMLDivElement) => {
     if (isLoadingFeed) return;
     if (observer.current) observer.current.disconnect();
-
     observer.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasMore) {
-        console.log("Last post visible, fetching more data (page " + page + ")");
-        // Panggil halaman berikutnya (bukan reset)
         fetchFeed(page, false); 
       }
     });
-
     if (node) observer.current.observe(node);
-    
   }, [isLoadingFeed, hasMore, page, fetchFeed]);
-  // ------------------------------------
 
-  // Tampilan loading utama (saat cek auth)
-  if (isLoading) {
+  // (Tampilan loading utama diubah untuk menangani hidrasi)
+  if (isHydrating) {
     return (
       <div className={styles.loading}>
         Loading...
@@ -132,25 +138,17 @@ const HomePage: NextPage = () => {
     );
   }
 
-  // --- TAMPILAN HALAMAN UTAMA ---
+  // (Sisa JSX Anda sudah benar)
   return (
     <div className={styles.container}>
       <Head>
         <title>Ganapatih Feed</title>
       </Head>
-
-      {/* --- KOLOM UTAMA (KIRI) --- */}
       <main className={styles.mainContent}>
-        {/* Panggil fungsi 'handleResetFeed' */}
         <CreatePostForm onPostCreated={handleResetFeed} />
-
-        {/* --- Daftar Feed --- */}
         <div className={styles.feedList}>
-          {/* Tampilkan postingan */}
           {posts.map((post, index) => {
-            // Cek apakah ini postingan terakhir
             if (posts.length === index + 1) {
-              // Jika ya, pasang 'ref' di sini
               return (
                 <div ref={lastPostRef} key={post.id} className={styles.post}>
                   <div className={styles.postHeader}>
@@ -163,7 +161,6 @@ const HomePage: NextPage = () => {
                 </div>
               );
             } else {
-              // Jika bukan, render seperti biasa
               return (
                 <div key={post.id} className={styles.post}>
                   <div className={styles.postHeader}>
@@ -177,17 +174,8 @@ const HomePage: NextPage = () => {
               );
             }
           })}
-
-          {/* Tampilkan loading di bagian bawah saat mengambil data baru */}
           {isLoadingFeed && <p>Loading more posts...</p>}
-
-          {feedError && (
-            <div className={styles.error}>
-              {feedError}
-            </div>
-          )}
-
-          {/* Cek jika tidak mengikuti siapa pun ATAU sudah tidak ada data lagi */}
+          {feedError && (<div className={styles.error}>{feedError}</div>)}
           {!isLoadingFeed && posts.length === 0 && !feedError && (
             <div className={styles.emptyFeed}>
               <h3 className={styles.emptyFeedTitle}>Your feed is empty</h3>
@@ -201,10 +189,7 @@ const HomePage: NextPage = () => {
           )}
         </div>
       </main>
-
-      {/* --- SIDEBAR (KANAN) --- */}
       <aside className={styles.sidebar}>
-        {/* Panggil fungsi 'handleResetFeed' */}
         <UserList onFollowSuccess={handleResetFeed} />
       </aside>
     </div>
