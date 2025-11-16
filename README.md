@@ -141,3 +141,9 @@ JWT_SECRET="rahasia-jwt-anda"
 
 # Kunci rahasia untuk menandatangani Refresh Token (7d)
 REFRESH_TOKEN_SECRET="rahasia-refresh-token-anda-yang-berbeda"
+```
+#### `frontend/.env.local.example`
+```ini
+# URL di mana backend API Anda berjalan
+NEXT_PUBLIC_API_URL="http://localhost:4001"
+```
