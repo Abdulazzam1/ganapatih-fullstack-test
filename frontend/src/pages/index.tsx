@@ -29,7 +29,7 @@ const HomePage: NextPage = () => {
   const [hasMore, setHasMore] = useState(true);
   const [feedError, setFeedError] = useState('');
 
-  // (Fungsi fetchFeed Anda sudah benar)
+  // (Fungsi fetchFeed Anda sudah benar dari v3.1)
   const fetchFeed = useCallback(async (pageNum: number, isReset: boolean = false) => {
     if (isLoadingFeed) return;
     if (!isReset && !hasMore) {
@@ -58,62 +58,58 @@ const HomePage: NextPage = () => {
     }
   }, [isLoadingFeed, hasMore]);
 
-  // (Fungsi handleResetFeed Anda sudah benar)
+  // ==========================================================
+  // --- (PERBAIKAN BUG MINOR "FEED HILANG") ---
+  // ==========================================================
   const handleResetFeed = () => {
-    console.log("Resetting feed...");
-    setPosts([]);
+    console.log("Resetting feed after follow/post...");
+    // Hapus 'setPosts([])' untuk mencegah "kedipan" atau "feed hilang"
+    // setPosts([]); // <-- INI ADALAH BUG-NYA (BARIS INI DIHAPUS)
     setPage(1);
     setHasMore(true);
+    // Langsung panggil fetchFeed. 'isReset=true' akan
+    // mengganti 'setPosts' dengan data baru secara otomatis.
     fetchFeed(1, true);
   };
+  // ==========================================================
   
-  // =================================================================
-  // --- (PERBAIKAN BUG UTAMA v3.1) - MENGGUNAKAN 'SUBSCRIBE' ---
-  // =================================================================
+  // (useEffect Pertama - Hidrasi - Sudah benar dari v3.1)
   useEffect(() => {
-    // 'useEffect' PERTAMA: HANYA untuk melacak status hidrasi
-    
     if (useAuthStore.persist.hasHydrated()) {
-      // Jika kebetulan sudah selesai, langsung set
       console.log("Already hydrated.");
       setIsHydrating(false);
     } else {
-      // Jika belum, subscribe ke store.
-      // Perubahan pertama (rehidrasi) akan memicu ini.
       const unsubscribe = useAuthStore.subscribe(() => {
         if (useAuthStore.persist.hasHydrated()) {
           console.log("Rehydration complete via subscribe.");
           setIsHydrating(false);
-          unsubscribe(); // Berhenti subscribe setelah selesai
+          unsubscribe(); 
         }
       });
       
       return () => {
-        unsubscribe(); // Cleanup
+        unsubscribe(); 
       };
     }
-  }, []); // Hanya berjalan sekali saat mount
+  }, []);
 
 
+  // (useEffect Kedua - Logika Auth/Load - Sudah benar dari v3.1)
   useEffect(() => {
-    // 'useEffect' KEDUA: Bereaksi terhadap perubahan hidrasi DAN token
-    
     if (isHydrating) {
       console.log("Waiting for hydration...");
-      return; // JANGAN LAKUKAN APA-APA jika masih hidrasi
+      return; 
     }
 
     if (!token) {
-      // Jika TIDAK ADA token SETELAH hidrasi, mental
       console.log("Hydration complete, NO token found. Redirecting to login.");
       router.replace('/login');
     } else {
-      // Jika ADA token SETELAH hidrasi, muat data
       console.log("Hydration complete, token FOUND. Loading data.");
       fetchFeed(1, true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHydrating, token, router]); // Bereaksi pada 3 hal ini
+  }, [isHydrating, token, router]);
 
 
   // (Logika Intersection Observer Anda sudah benar)
@@ -129,7 +125,7 @@ const HomePage: NextPage = () => {
     if (node) observer.current.observe(node);
   }, [isLoadingFeed, hasMore, page, fetchFeed]);
 
-  // (Tampilan loading utama diubah untuk menangani hidrasi)
+  // (Tampilan loading utama diubah untuk menangani hidrasi - Sudah benar)
   if (isHydrating) {
     return (
       <div className={styles.loading}>
