@@ -147,3 +147,40 @@ REFRESH_TOKEN_SECRET="rahasia-refresh-token-anda-yang-berbeda"
 # URL di mana backend API Anda berjalan
 NEXT_PUBLIC_API_URL="http://localhost:4001"
 ```
+
+## 📚 Kontrak API
+| Endpoint | Method | Auth | Body | Deskripsi |
+| :--- | :--- | :--- | :--- | :--- |
+| `/api/register` | `POST` | Tidak | `{ "username", "password" }` | Registrasi pengguna baru. |
+| `/api/login` | `POST` | Tidak | `{ "username", "password" }` | Login pengguna, mengembalikan `accessToken` (JSON) dan `refreshToken` (Cookie). |
+| `/api/refresh` | `POST` | Tidak | (Kosong, perlu *cookie*) | Menggunakan `refreshToken` dari *cookie* untuk menerbitkan `accessToken` baru (Poin Bonus). |
+| `/api/posts` | `POST` | Wajib | `{ "content" }` | Membuat postingan baru (maks 200 char). |
+| `/api/feed` | `GET` | Wajib | (Query: `?page=1&limit=10`) | Mengambil *feed* postingan (paginasi) dari pengguna yang di-*follow*. |
+| `/api/follow/:userid` | `POST` | Wajib | (Kosong) | Mengikuti seorang pengguna. |
+| `/api/follow/:userid` | `DELETE`| Wajib | (Kosong) | Berhenti mengikuti seorang pengguna. |
+| `/api/users` | `GET` | Wajib | (Kosong) | Mengambil daftar semua pengguna (untuk "Who to follow"). |
+
+## ✅ Skenario Pengujian
+
+| Test Case | Fitur | Skenario Pengujian | Hasil yang Diharapkan | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **TC-1.1** | User Mgmt | Registrasi pengguna baru | "Registration successful!" | **Lulus** |
+| **TC-1.2** | User Mgmt | Registrasi pengguna duplikat | Error 409: "Username already exists" | **Lulus** |
+| **TC-1.3** | User Mgmt | Registrasi input kosong | Error: "cannot be empty" | **Lulus** |
+| **TC-1.4** | User Mgmt | Login dengan kredensial valid | Berhasil masuk ke halaman feed (`/`) | **Lulus** |
+| **TC-1.5** | User Mgmt | Login dengan password salah | Error 401: "Invalid username or password" | **Lulus** |
+| **TC-2.1** | Posts | Membuat postingan baru (<200 char) | Postingan baru muncul di feed | **Lulus** |
+| **TC-2.2** | Posts | Validasi postingan (>200 char) | Tombol "Post" nonaktif (disabled) | **Lulus** |
+| **TC-3.1** | Follow | Follow seorang pengguna | Tombol berubah menjadi "Unfollow" | **Lulus** |
+| **TC-3.2** | Follow | Unfollow seorang pengguna | Tombol berubah menjadi "Follow" | **Lulus** |
+| **TC-4.1** | News Feed | Feed (setelah follow pengguna) | Postingan dari pengguna yang di-follow muncul | **Lulus** |
+| **TC-4.2** | News Feed | Feed (tidak follow siapa pun) | Menampilkan pesan "Your feed is empty" | **Lulus** |
+| **TC-B1.1** | Bonus: Auth | Refresh halaman setelah login ("Bug Pentalan") | Pengguna tetap login, tidak terpental | **Lulus** |
+| **TC-B1.2** | Bonus: Auth | Aksi setelah 16 menit (token kedaluwarsa) | Aksi berhasil (auto refresh token) | **Lulus** |
+| **TC-B2.1** | Bonus: UI/UX | Tampilan timestamp postingan | Menampilkan format "time-ago" (mis: "15 minutes ago") | **Lulus** |
+| **TC-B2.2** | Bonus: UI/UX | Scroll feed ke paling bawah | Menampilkan "You have reached the end of the feed." | **Lulus** |
+| **TC-C1.1** | Bonus: Docker| `docker-compose up --build` | Semua 3 layanan (FE, BE, DB) berjalan sukses | **Lulus** |
+| **TC-C1.2** | Bonus: Docker| Tes koneksi FE <-> BE di Docker | Registrasi pengguna baru di `localhost:3000` berhasil | **Lulus** |
+| **TC-D1.1** | Deploy | Tes koneksi BE <-> DB (Railway <-> Neon) | Migrasi database berjalan sukses di log deploy | **Lulus** |
+| **TC-D1.2** | Deploy | Tes CORS (Vercel <-> Railway) | Registrasi pengguna di URL Vercel berhasil (CORS teratasi) | **Lulus** |
+| **TC-F1.1** | Bug Fix | Tes "Feed Hilang" saat Follow/Unfollow | Feed me-refresh dengan mulus tanpa "menghilang" | **Lulus** |
